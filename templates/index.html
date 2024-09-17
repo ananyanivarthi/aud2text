@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload or Record Audio</title>
+</head>
+<body>
+    <h1>Upload or Record Audio</h1>
+
+    <!-- Form to upload audio file -->
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+        <input type="file" name="audio_file" accept=".wav,.mp3">
+        <input type="submit" value="Upload">
+    </form>
+
+    <hr>
+
+    <!-- Button to record audio -->
+    <h2>Record Using Microphone</h2>
+    <button id="start-record-btn">Start Recording</button>
+    <button id="stop-record-btn" disabled>Stop Recording</button>
+
+    <p id="recording-status"></p>
+
+    <audio id="audio-playback" controls hidden></audio>
+
+    <form method="POST" action="/upload-mic" enctype="multipart/form-data" hidden>
+        <input type="file" id="mic-audio-file" name="mic_audio_file">
+        <input type="submit" value="Upload" id="upload-audio-btn">
+    </form>
+
+    <script>
+
+        let mediaRecorder;
+        let audioChunks = [];
+
+        const startRecordBtn = document.getElementById("start-record-btn");
+        const stopRecordBtn = document.getElementById("stop-record-btn");
+        const recordingStatus = document.getElementById("recording-status");
+        const audioPlayback = document.getElementById("audio-playback");
+        const micAudioFileInput = document.getElementById("mic-audio-file");
+        const uploadAudioForm = document.querySelector('form[action="/upload-mic"]');
+        const uploadAudioBtn = document.getElementById("upload-audio-btn");
+
+        startRecordBtn.addEventListener("click", () => {
+            // Request microphone permission and start recording if granted
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        audioPlayback.src = audioUrl;
+                        audioPlayback.hidden = false;
+
+                        // Convert Blob to File to send to backend
+                        const audioFile = new File([audioBlob], "mic_audio.wav", { type: "audio/wav" });
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(audioFile);
+                        micAudioFileInput.files = dataTransfer.files;
+
+                        uploadAudioForm.hidden = false;
+                        uploadAudioBtn.click();
+                    };
+
+                    startRecordBtn.disabled = true;
+                    stopRecordBtn.disabled = false;
+                    recordingStatus.innerText = "Recording...";
+                })
+                .catch(error => {
+                    console.error("Microphone permission denied or error occurred: ", error);
+                    recordingStatus.innerText = "Microphone access denied. Please allow access.";
+                });
+        });
+
+        stopRecordBtn.addEventListener("click", () => {
+            mediaRecorder.stop();
+            startRecordBtn.disabled = false;
+            stopRecordBtn.disabled = true;
+            recordingStatus.innerText = "Recording stopped. Uploading...";
+        });
+    
+    </script>
+</body>
+</html>
